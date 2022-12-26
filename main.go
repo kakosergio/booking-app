@@ -2,34 +2,48 @@ package main
 
 import (
 	"fmt"
-	"strings"
+	"sync"
+	"time"
 )
+
+const conferenceTickets = 50
+
+var conferenceName = "Go Conference"
+var remainingTickets uint = conferenceTickets
+var bookings = make([]UserData, 0)
+
+type UserData struct {
+	firstName       string
+	lastName        string
+	email           string
+	numberOfTickets uint
+}
+
+// create a wait group for threads to be executed
+var wg = sync.WaitGroup{}
 
 func main() {
 
-	conferenceName := "Go Conference"
-	const conferenceTickets = 50
-	var remainingTickets uint = conferenceTickets
+	greetUsers()
 
-	greetUsers(conferenceName, conferenceTickets, remainingTickets)
-
-	bookings := []string{}
-
-	for {
 
 		firstName, lastName, email, userTickets := getUserInput()
 
-		isValidName, isValidEmail, isValidTicketNumber := validateUserInput(firstName, lastName, email, userTickets, remainingTickets)
+		isValidName, isValidEmail, isValidTicketNumber := validateUserInput(firstName, lastName, email, userTickets)
 
 		if isValidName && isValidEmail && isValidTicketNumber {
-			
-			bookTicket(remainingTickets, userTickets, bookings, firstName, lastName, email, conferenceName)
 
-			printFirstNames(bookings)
+			bookTicket(userTickets, firstName, lastName, email)
+
+			// add a new thread to be waited
+			wg.Add(1)
+			go sendTicket(userTickets, firstName, lastName, email)
+
+			getFirstNames()
 
 			if remainingTickets == 0 {
 				fmt.Println("Our conference is booked out. Come back next year.")
-				break
+				// break
 			}
 		} else {
 			if !isValidName {
@@ -42,31 +56,23 @@ func main() {
 				fmt.Println("Enter a correct number of tickets to proceed.")
 			}
 		}
-	}
+		// tells the program to wait for the thread
+		wg.Wait()
 }
 
-func greetUsers(confName string, confTickets uint, remTickets uint) {
-	fmt.Printf("Welcome to our %v booking application\n", confName)
-	fmt.Printf("We have a total of %v tickets and %v are still available.\n", confTickets, remTickets)
+func greetUsers() {
+	fmt.Printf("Welcome to our %v booking application\n", conferenceName)
+	fmt.Printf("We have a total of %v tickets and %v are still available.\n", conferenceTickets, remainingTickets)
 	fmt.Println("Get your tickets here to attend")
 }
 
-func printFirstNames(bookings []string) {
+func getFirstNames() {
 	firstNames := []string{}
 	for _, booking := range bookings {
-		var names = strings.Fields(booking)
-		firstNames = append(firstNames, names[0])
+		firstNames = append(firstNames, booking.firstName)
 	}
 
 	fmt.Printf("The first names of bookings are: %v\n", firstNames)
-}
-
-func validateUserInput(firstName string, lastName string, email string, userTickets uint, remainingTickets uint) (bool, bool, bool) {
-	isValidName := len(firstName) > 1 && len(lastName) > 1
-	isValidEmail := strings.Contains(email, "@")
-	isValidTicketNumber := userTickets > 0 && userTickets <= remainingTickets
-
-	return isValidEmail, isValidName, isValidTicketNumber
 }
 
 func getUserInput() (string, string, string, uint) {
@@ -91,11 +97,31 @@ func getUserInput() (string, string, string, uint) {
 	return firstName, lastName, email, userTickets
 }
 
-func bookTicket(remainingTickets uint, userTickets uint, bookings []string, firstName string, lastName string, email string, conferenceName string) {
+func bookTicket(userTickets uint, firstName string, lastName string, email string) {
 	remainingTickets -= userTickets
-	bookings = append(bookings, firstName+" "+lastName)
+
+	var userData = UserData{
+		firstName:       firstName,
+		lastName:        lastName,
+		email:           email,
+		numberOfTickets: userTickets,
+	}
+
+	bookings = append(bookings, userData)
 
 	fmt.Printf("Thank you %v %v for booking %v tickets. You will receive a confirmation e-mail at %v.\n", firstName, lastName, userTickets, email)
 
 	fmt.Printf("%v remaining tickets for %v\n", remainingTickets, conferenceName)
+}
+
+func sendTicket(userTickets uint, firstName string, lastName string, email string) {
+	time.Sleep(10 * time.Second)
+	var ticket = fmt.Sprintf("%v tickets for %v %v", userTickets, firstName, lastName)
+
+	fmt.Println("##############")
+	fmt.Printf("Sending ticket:\n%v\nto e-mail address %v\n", ticket, email)
+	fmt.Println("##############")
+
+	// tells the program that the thread is finished
+	wg.Done()
 }
